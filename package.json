@@ -1,0 +1,29 @@
+{
+  "name": "rehydrator",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "typescript": "^5.8.3"
+  },
+  "description": "`rehydrator` lets you serialize otherwise unserializable values by capturing the function call that generated them — not just the output.",
+  "dependencies": {
+    "undici-types": "^6.21.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sjmeverett/rehydrator.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/sjmeverett/rehydrator/issues"
+  },
+  "homepage": "https://github.com/sjmeverett/rehydrator#readme"
+}
