@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { serializable, createReviver } from "./index.ts";
+import {
+  serializable,
+  createReviver,
+  createFormat,
+  shortFormat,
+} from "./index.ts";
 
 const string = serializable(
   "string",
@@ -63,4 +68,17 @@ test("can rehydrate multiple registered functions", () => {
   const revived = JSON.parse(json, createReviver([date, string]));
   assert.ok(revived.d instanceof Date);
   assert.equal(revived.s("test"), true);
+});
+
+test("shortFormat: serializes and deserializes a function call", () => {
+  const { serializable, createReviver } = createFormat(shortFormat);
+
+  const date = serializable("date", (iso: string) => new Date(iso));
+  const json = JSON.stringify(date("1999-12-31"));
+
+  assert.equal(json, JSON.stringify({ $date: ["1999-12-31"] }));
+
+  const revive = createReviver([date]);
+  const revived = JSON.parse(json, revive) as Date;
+  assert.equal(revived.valueOf(), new Date("1999-12-31").valueOf());
 });

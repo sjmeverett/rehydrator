@@ -1,58 +1,108 @@
 export type AnyFn = (...input: any[]) => any;
 
-export interface SerializedCall {
-  __fn: string;
-  input: unknown[];
+export interface FnCall {
+  name: string;
+  args: unknown[];
 }
 
-export function serializable<Name extends string, Fn extends AnyFn>(
-  name: Name,
-  fn: Fn,
-): Fn {
+export type FnCallSerializer = (call: FnCall) => unknown;
+export type FnCallDeserializer = (data: unknown) => FnCall | undefined;
+
+export interface FormatOptions {
+  serialize: FnCallSerializer;
+  deserialize: FnCallDeserializer;
+}
+
+export function createFormat({ serialize, deserialize }: FormatOptions) {
   return {
-    [name]: ((...input) => {
-      const result = fn(...input);
+    serializable<Name extends string, Fn extends AnyFn>(
+      name: Name,
+      fn: Fn,
+    ): Fn {
+      return {
+        [name]: ((...args) => {
+          const result = fn(...args);
 
-      return Object.assign(result, {
-        toJSON(): SerializedCall {
-          return {
-            __fn: name,
-            input,
-          };
-        },
-      });
-    }) as Fn,
-  }[name];
-}
+          return Object.assign(result, {
+            toJSON() {
+              return serialize({ name, args });
+            },
+          });
+        }) as Fn,
+      }[name];
+    },
 
-export function isSerializedCall(obj: unknown): obj is SerializedCall {
-  return (
-    obj !== null &&
-    typeof obj === "object" &&
-    Object.keys(obj).length === 2 &&
-    "__fn" in obj &&
-    typeof obj.__fn === "string" &&
-    "input" in obj &&
-    Array.isArray(obj.input)
-  );
-}
+    createReviver(functions: AnyFn[]) {
+      const map = new Map<string, AnyFn>();
 
-export function createReviver(functions: AnyFn[]) {
-  const map = new Map(functions.map((fn) => [fn.name, fn]));
-
-  return (_key: string, value: unknown) => {
-    if (isSerializedCall(value)) {
-      const fn = map.get(value.__fn);
-
-      if (!fn) {
-        throw new Error(
-          `Tried to deserialize unknown function call ${value.__fn}`,
-        );
+      for (const fn of functions) {
+        if (map.has(fn.name)) {
+          throw new Error(`Duplicate function name "${fn.name}"`);
+        }
+        map.set(fn.name, fn);
       }
 
-      return fn(...value.input);
-    }
+      return (_key: string, value: unknown) => {
+        const call = deserialize(value);
 
-    return value;
+        if (call) {
+          const fn = map.get(call.name);
+
+          if (!fn) {
+            throw new Error(
+              `Tried to deserialize unknown function call ${call.name}`,
+            );
+          }
+
+          return fn(...call.args);
+        }
+
+        return value;
+      };
+    },
   };
 }
+
+export const defaultFormat = {
+  serialize(call) {
+    return { __fn: call.name, input: call.args };
+  },
+
+  deserialize(obj) {
+    if (
+      obj !== null &&
+      typeof obj === "object" &&
+      !Array.isArray(obj) &&
+      Object.keys(obj).length === 2 &&
+      "__fn" in obj &&
+      typeof obj.__fn === "string" &&
+      "input" in obj &&
+      Array.isArray(obj.input)
+    ) {
+      return { name: obj.__fn, args: obj.input };
+    } else {
+      return undefined;
+    }
+  },
+} satisfies FormatOptions;
+
+export const shortFormat = {
+  serialize(call) {
+    return { [`$${call.name}`]: call.args };
+  },
+
+  deserialize(obj) {
+    if (obj !== null && typeof obj === "object" && !Array.isArray(obj)) {
+      const keys = Object.keys(obj);
+      const args = (obj as Record<string, unknown>)[keys[0]];
+
+      if (keys.length === 1 && keys[0].startsWith("$") && Array.isArray(args)) {
+        return { name: keys[0].substring(1), args };
+      }
+    }
+  },
+} satisfies FormatOptions;
+
+const { serializable, createReviver } = createFormat(defaultFormat);
+
+export { serializable, createReviver };
